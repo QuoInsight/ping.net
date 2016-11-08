@@ -165,6 +165,8 @@ namespace myNameSpace {
       return nicInfo;
     }
 
+    // Ref: http://stackoverflow.com/questions/431755/get-ssid-of-the-wireless-network-i-am-connected-to-with-c-sharp-net-on-windows
+    
     static string getConnectedSsidWMI() {
       System.Management.ManagementObjectSearcher searcher = new System.Management.ManagementObjectSearcher(
         "root\\WMI", "SELECT * FROM MSNdis_80211_ServiceSetIdentifier"
