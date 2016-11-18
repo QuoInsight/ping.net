@@ -1,3 +1,6 @@
+/*
+  © (ɔ) QuoInsight
+*/
 using System;
 using System.Runtime.InteropServices; // DllImport
 using System.Net.NetworkInformation;
