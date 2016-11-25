@@ -139,9 +139,9 @@ namespace myNameSpace {
                  || nic.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Ethernet)
           ) {
             macAddr = nic.GetPhysicalAddress().ToString();
-            nicInfo = "[" + nic.Name + "] Type:" + nic.NetworkInterfaceType + "\nMAC:" + macAddr;
+            nicInfo = Environment.MachineName + " [" + nic.Name + "] Type:" + nic.NetworkInterfaceType + " MAC:" + macAddr + "\n";
             if (nic.NetworkInterfaceType.ToString().IndexOf("Wireless")==0) {
-              nicInfo += " SSID:" + getConnectedSsidNetsh(macAddr); // Windows.Networking.Connectivity.GetConnectedSsid();
+              nicInfo += " " + getConnectedSsidNetsh(macAddr); // Windows.Networking.Connectivity.GetConnectedSsid();
             }
             var props = nic.GetIPProperties();  if (props == null) {
               continue;
@@ -187,6 +187,10 @@ namespace myNameSpace {
       return "";
     }
 
+    static string getTextAfterFirstColon(string txt) {
+      return System.Text.RegularExpressions.Regex.Replace(txt, @"^([^:]*:\s*)", "");
+    }
+    
     static string getConnectedSsidNetsh(string macAddr) {
       string ssid = "";
       try {
@@ -204,13 +208,14 @@ namespace myNameSpace {
         bool foundMacAddr = false;
         foreach( var line in output.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries) ) {
           if (foundMacAddr) {
-            if ( line.Contains("SSID") && !line.Contains("BSSID") )
-              ssid = line.Split(new[]{":"}, StringSplitOptions.RemoveEmptyEntries)[1].Trim();
-            else if ( line.IndexOf("Signal", StringComparison.OrdinalIgnoreCase) > 0 ) {
-              ssid += " [" + line.Split(new[]{":"}, StringSplitOptions.RemoveEmptyEntries)[1].Trim() + "]";
+            if ( line.Contains("BSSID") ) {
+              ssid += " BSSID:" + getTextAfterFirstColon(line.Trim()).Replace(":","");
+            } else if ( line.Contains("SSID") ) {
+              ssid += getTextAfterFirstColon(line.Trim());
+            } else if ( line.IndexOf("Signal", StringComparison.OrdinalIgnoreCase) > 0 ) {
+              ssid += " [" + getTextAfterFirstColon(line.Trim()) + "]";
               break;
             }
-            //return line.Split(new[]{":"}, StringSplitOptions.RemoveEmptyEntries)[1].TrimStart();
           } else {
             foundMacAddr = ( line.ToUpper().Replace(":","").Replace("-","").IndexOf(macAddr) > 0 );
           }
