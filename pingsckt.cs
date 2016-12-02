@@ -10,7 +10,7 @@ namespace myNameSpace {
   class myClass {
     public static bool consoleCancelled = false;
     public static string targetHost="", nicInfo="", logFile="pingsckt.log";
-    public static int targetPort=80, timeout=2000;
+    public static int targetPort=80, timeout=10000;
     public static DateTime startTime = DateTime.Now;
     public static long i=0, pingCount=1800, responseCount=0, responseTime=0, totalResponseTime=0, minResponseTime=-1, maxResponseTime=0;
 
@@ -134,7 +134,7 @@ namespace myNameSpace {
     ////////////////////////////////////////////////////////////////////
 
     public static long connectSocket(string targetHost, int targetPort, int timeout) {
-      bool validIpAddr = true;
+      bool validIpAddr = true, timedOut = false;
       DateTime startTime = DateTime.Now;
       System.Net.IPAddress ipAddress = null;
       try {
@@ -159,7 +159,7 @@ namespace myNameSpace {
         try {
           //socket.Connect(ipAddress, targetPort);
           IAsyncResult result = socket.BeginConnect(ipAddress, targetPort, null, null);
-          bool success = result.AsyncWaitHandle.WaitOne(2000, true);
+          timedOut = ! result.AsyncWaitHandle.WaitOne(timeout, true);
         } catch(Exception e) {
           Console.Error.WriteLine(e.ToString().Split('\n')[0]); // e.Message
           return -1;
@@ -176,7 +176,8 @@ namespace myNameSpace {
           try {
             socket.Close();
           } catch {}
-          println(DateTime.Now.ToString("HH:mm:ss.fff ", System.Globalization.CultureInfo.InvariantCulture) + "TimedOut / Failed to connect [" + ipAddress + ":" + targetPort + "]");
+          println(DateTime.Now.ToString("HH:mm:ss.fff ", System.Globalization.CultureInfo.InvariantCulture)
+            + (timedOut ? "TimedOut" : "Failed to connect") + " [" + ipAddress + ":" + targetPort + "]");
           return -1;
         }
       } else { // UDP Port
