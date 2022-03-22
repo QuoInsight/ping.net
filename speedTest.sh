@@ -21,6 +21,7 @@ else
   fi
 fi
 case "$url" in
+  # more URL at http://c.speedtest.net/speedtest-servers-static.php
   "tm") url='https://speedtest-northern.tm.com.my:8080/download?size=104857600' ;;
   "kris") url='http://speedtest2.mykris.net:8080/download?size=104857600' ;;
   "th") url='https://speedtest-hyi1.3bb.co.th.prod.hosts.ooklaserver.net:8080/download?size=104857600' ;;
