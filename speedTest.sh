@@ -8,7 +8,8 @@
 ## curl shows the speed in bytes/second instead of bits/second !!!
 ## 1Mbps==128K | 3Mbps==384K | 5Mbps==640K | 10Mbps==1.25M/1280K
 
-if [[ "$1" =~ '^[0-9]+$' ]]; then
+#if [[ "$1" =~ '^[0-9]+$' ]]; then  ## this works for bash/ash only, [[]] not supported by sh/bourne shell
+if (echo "$1" | grep -q -E '^[0-9]+$'); then  ## this works for all bash/ash/sh
   maxTime=$1
   if [ "$2" != "" ]; then
     url=$2
