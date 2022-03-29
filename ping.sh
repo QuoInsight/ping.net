@@ -1,5 +1,5 @@
 #!/bin/sh
-TARGET="8.8.8.8"
+TARGET=$1; [ -z "$TARGET" ] && TARGET="8.8.8.8"
 PING="ping $TARGET -W 1 -c 1 -q 2>&1 | tail -1"
 LOG=/tmp/ping.log
 
@@ -12,14 +12,14 @@ chkResult() {
 date | tee -a $LOG
 result=`eval $PING`
 chkResult "$result"; r0=$?
-echo "$result" | tee -a $LOG
+echo "[$TARGET] $result" | tee -a $LOG
 while true; do
   sleep 1
   result=`eval $PING`
   chkResult "$result"; r1=$?
   if [ $r1 != $r0 ]; then  ## this works for all bash/ash/sh
     date | tee -a $LOG
-    echo "$result" | tee -a $LOG
+    echo "[$TARGET] $result" | tee -a $LOG
   else
     echo "$result"
   fi
