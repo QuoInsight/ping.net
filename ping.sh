@@ -4,7 +4,7 @@ PING="ping $TARGET -W 1 -c 1 -q 2>&1 | tail -1"
 LOG=/tmp/ping.log
 
 chkResult() {
-  r=1; (echo "$1" | grep -e '100% packet loss' -e 'Invalid' -e 'address') && r=0
+  r=1; (echo "$1" | grep -e '100% packet loss' -e 'unreachable' -e 'Invalid' -e 'address') && r=0
   #echo "1: $1";  echo "r: $r"
   return $r
 }
