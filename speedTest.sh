@@ -26,7 +26,7 @@ case "$url" in
   "kris") url='http://speedtest2.mykris.net:8080/download?size=104857600' ;;
   "u"|"") url='https://speedtest2.u.com.my:8080/download?size=104857600' ;;
   "-")  ## more URL at http://c.speedtest.net/speedtest-servers-static.php
-    url=`curl -s http://c.speedtest.net/speedtest-servers-static.php | grep -E -m 1 'host="(\S+)"' | sed -n -e 's/^.\+host="\(\S\+\)".*/\1/p'`
+    url=`curl -s http://c.speedtest.net/speedtest-servers-static.php | grep -E -m 1 'host="(\S+)"' | sed -n -r 's/^.+host="(\S+)".*/\1/p'`
     url="http://$url/download?size=104857600"
   ;;
 esac
