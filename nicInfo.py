@@ -82,8 +82,14 @@ def getNicInfo() :
   (gwAddr,gwIf) = defaultGW[netifaces.AF_INET]
   addrs = netifaces.ifaddresses(gwIf) ## {793B7B92-2A7D-4399-B444-450C0846479F}
   macAddr = addrs[netifaces.AF_LINK][0]['addr']
-  ipAddr = addrs[netifaces.AF_INET][0]['addr']
   sckAddr = socket.gethostbyname(hostName)
+  ipAddr = ""
+  try :
+    ipAddr = addrs[netifaces.AF_INET][0]['addr']
+  except Exception as e:
+    ipAddr = sckAddr
+    # print("Error: " + str(e))
+  #
   if (ipAddr!=sckAddr) : ipAddr += "/" + sckAddr
   return (
     hostName + " " + getIfName(gwIf) + " MAC:" + macAddr.replace(":","").upper()
