@@ -25,7 +25,7 @@ echo "$cmdln"
 psOutput=$(ps -w | grep 'ssh ' | grep -v 'grep')
 IFS=$'\n'
 for line in $psOutput ; do
-  PID=`echo "$line" | sed -r 's/^\s*([0-9]+).*/\1/'`
+  PID=`echo "$line" | sed -e 's/^ *\([0-9]\+\).*/\1/'` # sed -r 's/^\s*([0-9]+).*/\1/'
   cmdln1=`cat /proc/$PID/cmdline | xargs -0 echo`
   if [ "$cmdln1" == "$cmdln" ]; then
     echo "**found** PID: $PID"
