@@ -118,8 +118,12 @@ local function getRdName(nameData)
       --print("refNameOffset: "..refNameOffset)
       -- 4.1.4. Message compression https://datatracker.ietf.org/doc/html/rfc1035
      --]]
-      rName = rName.."*."  -- nameData:sub(idx,idx)
+      rName = rName.."*" -- we will not follow the reference/pointer and expand the name here,
+      -- this allows us to keep the same length in the string output as the raw data !!
       idx = idx+1
+      -- if a reference/pointer is found/used, it must be either the only element
+      -- or the last element !! hence, we should return immediately and ends here
+      return rName
     end
   end
   return rName
@@ -148,7 +152,7 @@ local function printDnsMsg(strMsg)
   ))
 
   qName1 = getRdName(strMsg:sub(13, #strMsg));
-  byteIdx = 13 + #qName1+1
+  byteIdx = 13 + #qName1+1 -- this is assuming the name is not expanded
   qType = tonumber(str2Hex(string.sub(strMsg,byteIdx,byteIdx+1)),16) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
   qClass = tonumber(str2Hex(string.sub(strMsg,byteIdx+2,byteIdx+3)),16) -- normally the value 1 for Internet ('IN')
   byteIdx = byteIdx+4 -- end of q1
@@ -158,7 +162,7 @@ local function printDnsMsg(strMsg)
   if (qryRspFlg==1 and qCount==1 and aCount > 0) then
     aName1 = getRdName(strMsg:sub(byteIdx, #strMsg));
     --print("byteIdx:"..byteIdx.." #aName1:"..#aName1)
-    byteIdx = byteIdx + #aName1 -- ending chr(0) shared with aType ?? !!!!
+    byteIdx = byteIdx + #aName1+1 -- this is assuming the name is not expanded
 
     aType = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+1)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
     aClass = bytes2Num(string.sub(strMsg,byteIdx+2,byteIdx+3)) -- normally the value 1 for Internet ('IN')
