@@ -121,8 +121,9 @@ local function getRdName(nameData)
       rName = rName.."*" -- we will not follow the reference/pointer and expand the name here,
       -- this allows us to keep the same length in the string output as the raw data !!
       idx = idx+1
-      -- if a reference/pointer is found/used, it must be either the only element
-      -- or the last element !! hence, we should return immediately and ends here
+      -- if a reference/pointer is found/used, it must either be the only element
+      -- or the last element !! no additional null character after this !!
+      -- hence, we should return immediately and ends here
       return rName
     end
   end
