@@ -5,6 +5,7 @@ local localport = 6760
 local upstrmServer = "8.8.8.8" -- "192.168.43.1" -- "8.8.8.8" -- !! 192.168.192.1 ==> tcpNotSupported ## 
 local upstrmPort = 53
 local sendLocalRsp = true
+local printRawMsg = false
 
 --[[
   dig -p 6760 @192.168.43.1 google.com
@@ -22,6 +23,13 @@ local function str2Hex(s)
     bytes[#bytes+1] = ('%02x'):format(s:byte(i,i))
   end
   return table.concat(bytes, '')
+end
+
+local function bytes2Num(bytes)
+  return tonumber(str2Hex(bytes),16)
+end
+local function bytesBE2Num(bytesBE)
+  return bytes2Num(bytesBE:reverse())
 end
 
 local function byte2BitsBE(n) -- https://stackoverflow.com/a/9080080
@@ -93,6 +101,36 @@ local function ipAddrBytes2Str(s)
   return aAddr
 end
 
+local function getRdName(nameData)
+  local idx = 1
+  local rName = ""
+  while true do
+    local sz1 = string.sub(nameData,idx,idx):byte()
+    idx = idx+1; if sz1==0 then break end
+    if sz1<192 then
+      rName = rName..nameData:sub(idx,idx+sz1-1).."."
+      idx = idx+sz1
+    else
+     --[[
+      refNameOffset = byte2BitsBE(sz1):reverse()
+      refNameOffset = aNameOffset:sub(3,#refNameOffset) .. charAt2Bits(nameData,idx)
+      refNameOffset = tonumber(refNameOffset, 2)
+      --print("refNameOffset: "..refNameOffset)
+      -- 4.1.4. Message compression https://datatracker.ietf.org/doc/html/rfc1035
+     --]]
+      rName = rName.."*."  -- nameData:sub(idx,idx)
+      idx = idx+1
+    end
+  end
+  return rName
+end
+
+local function getRdType(qnAnsData)
+  local endOfNameData = string.find(qnAnsData, string.char(0), 1, true) -- true==plainTextSearchOnly/noPatternMatching
+  local rspData = string.sub(qnAnsData,1,endOfNameData+4) -- remove all trailing data
+  return tonumber(str2Hex(string.sub(qnAnsData,endOfNameData+1,endOfNameData+2)),16) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
+end
+
 local function printDnsMsg(strMsg)
   --msgHdrHex = str2Hex(strMsg:sub(1,12)) ; print(msgHdrHex)
   -- ID:2bytes; Flags+OpCode+RespCode:2bytes; RecordsCount:4*2bytes
@@ -102,74 +140,49 @@ local function printDnsMsg(strMsg)
 
   byte4 = charAt2Bits(strMsg,4)
   rspCode = tonumber(byte4:sub(5,8), 2)
-  qCount = tonumber(str2Hex(string.sub(strMsg,5,6)),16)
-  aCount = tonumber(str2Hex(string.sub(strMsg,7,8)),16)
+  qCount = bytes2Num(string.sub(strMsg,5,6))
+  aCount = bytes2Num(string.sub(strMsg,7,8))
 
   print(string.format("[Header] qryRspFlg:%d opCode:%d rspCode:%d qCount:%d aCount:%d",
     qryRspFlg, opCode, rspCode, qCount, aCount
   ))
 
-  byteIdx = 13
-  qName1 = ""
-  while true
-  do
-    sz1 = string.sub(strMsg,byteIdx,byteIdx):byte();  byteIdx = byteIdx + 1;
-    if sz1==0 then break end
-    byteIdx2 = byteIdx + sz1 - 1
-    qName1 = qName1 .. strMsg:sub(byteIdx,byteIdx2) .. "."
-    byteIdx = byteIdx2 + 1
-  end
+  qName1 = getRdName(strMsg:sub(13, #strMsg));
+  byteIdx = 13 + #qName1+1
   qType = tonumber(str2Hex(string.sub(strMsg,byteIdx,byteIdx+1)),16) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
   qClass = tonumber(str2Hex(string.sub(strMsg,byteIdx+2,byteIdx+3)),16) -- normally the value 1 for Internet ('IN')
   byteIdx = byteIdx+4 -- end of q1
 
-  print("qName1: "..qName1)
-  --print("qType: "..qType.."\nqClass: "..qClass)
+  print("qName1: ["..qName1.."] qType:"..qType.." qClass:"..qClass)
 
   if (qryRspFlg==1 and qCount==1 and aCount > 0) then
-    aNameOffset = charAt2Bits(strMsg,byteIdx)
-    --print(aNameOffset)
-    -- 4.1.4. Message compression https://datatracker.ietf.org/doc/html/rfc1035
-    if aNameOffset:sub(1,2)=="11" and strMsg:sub(byteIdx+2,byteIdx+2):byte()==0 then
-      aNameOffset = aNameOffset:sub(3,#aNameOffset+1) .. charAt2Bits(strMsg,byteIdx+1)
-      aNameOffset = tonumber(aNameOffset, 2)
-      --print("aNameOffset:"..aNameOffset)
-      -- we will simply use qName1 above and advance 2 bytes below to the next data
-      aName1 = qName1
-      byteIdx = byteIdx + 2
-    else
-      aNameOffset = 0
-      aName1 = ""
-      while true
-      do
-        sz1 = string.sub(strMsg,byteIdx,byteIdx):byte();  byteIdx = byteIdx + 1;
-        if sz1==0 then break end
-        byteIdx2 = byteIdx + sz1 - 1
-        aName1 = aName1 .. strMsgsub(byteIdx,byteIdx2) .. "."
-        byteIdx = byteIdx2 + 1
-      end
-    end
+    aName1 = getRdName(strMsg:sub(byteIdx, #strMsg));
+    --print("byteIdx:"..byteIdx.." #aName1:"..#aName1)
+    byteIdx = byteIdx + #aName1 -- ending chr(0) shared with aType ?? !!!!
 
-    aType = tonumber(str2Hex(string.sub(strMsg,byteIdx,byteIdx+1)),16) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
-    aClass = tonumber(str2Hex(string.sub(strMsg,byteIdx+2,byteIdx+3)),16) -- normally the value 1 for Internet ('IN')
+    aType = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+1)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
+    aClass = bytes2Num(string.sub(strMsg,byteIdx+2,byteIdx+3)) -- normally the value 1 for Internet ('IN')
     byteIdx = byteIdx+4 --
-    --print("aType:"..aType)
-    --print("aClass:"..aClass)
+    print("aType:"..aType.." aClass:"..aClass.." aName1: ["..aName1.."]")
 
-    aTtl = tonumber(str2Hex(string.sub(strMsg,byteIdx,byteIdx+3)),16)
+    aTtl = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+3))
     byteIdx = byteIdx+4 --
-    print("aTtl:"..aTtl)
-
-    aSize = tonumber(str2Hex(string.sub(strMsg,byteIdx,byteIdx+1)),16)
+    aSize = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+1))
     byteIdx = byteIdx+2 --
-    --print("aSize:"..aSize)
-    print("aAddr:"..ipAddrBytes2Str(strMsg:sub(byteIdx,byteIdx+aSize-1)))
+    print("aTtl:"..aTtl.." aSize:"..aSize)
 
+    aData = strMsg:sub(byteIdx,byteIdx+aSize-1)
+    if (aType==5) then
+      print("cname: "..getRdName(aData..string.char(0)));
+    elseif (aType==1 or aType==28) then
+      print("ip: "..ipAddrBytes2Str(aData))
+    else
+      print("data: "..str2Hex(aData))
+    end
   end
-
 end
 
-local function createLocalRsp(qryData, hostName, ipv4Addr, ipv6Addr)
+local function createLocalRsp(qryData, hostName, ipAddrV4, ipAddrV6)
   local endOfNameData = string.find(qryData, string.char(0), 13, true) -- true==plainTextSearchOnly/noPatternMatching
   local rspData = string.sub(qryData,1,endOfNameData+4) -- remove all trailing data
 
@@ -184,6 +197,7 @@ local function createLocalRsp(qryData, hostName, ipv4Addr, ipv6Addr)
 
   local aType = qType
   local aCount = 1
+  local rData = ""
 
   local aNameData = hex2Str("c00c") -- this is default !!
   --aNameData = hex2Str("06676f6f676c65c013") -- this is accepted !!
@@ -191,7 +205,14 @@ local function createLocalRsp(qryData, hostName, ipv4Addr, ipv6Addr)
   --aNameData = "-" ; aNameData = string.char(#aNameData)..aNameData..hex2Str("c00c") -- this is OK
 
   if (aType==28) then
-    rData = ipAddrString2Bytes(ipv6Addr)
+    if (ipAddrV6=="" or ipAddrV6=="::") then
+      aCount = 0 -- this simply means we do not have any ipAddrV6 record
+    else
+      rData = ipAddrString2Bytes(ipAddrV6)
+    end
+  elseif (aType==1) then
+    if (ipAddrV4=="" or ipAddrV4=="0.0.0.0") then
+      aCount = 0 -- this simply means we do not have any ipAddrV4 record
   else
 
     -- !! add CNAME !!
@@ -199,12 +220,16 @@ local function createLocalRsp(qryData, hostName, ipv4Addr, ipv6Addr)
     aType5 = 5
     rData = hostName ; rData = string.char(#rData)..rData..string.char(0)
     answerData0 = (
-      hex2Str("c00c") .. string.char(0) .. string.char(aType5) .. hex2Str("00010000003c00")
-       .. string.char(#rData) .. rData
-    )
-    aNameData = answerData0..rData
+        hex2Str("c00c") .. string.char(0)
+         .. string.char(aType5) .. hex2Str("00010000003c00")
+          .. string.char(#rData) .. rData
+      )
+      aNameData = answerData0..rData
 
-    rData = ipAddrString2Bytes(ipv4Addr)
+      rData = ipAddrString2Bytes(ipAddrV4)
+    end
+  else
+    aCount = 0
   end
 
   answerData = (
@@ -239,10 +264,21 @@ do
     print(("\n%02d:%02d:%02d udp:receivefrom %s:%s (%d bytes)"):format(
       time.hour, time.min, time.sec, clntMsgOrIp, clntPort, string.len(data)
     ))
-    --print(str2Hex(data))
-    print(data)
+    if printRawMsg then
+      print(str2Hex(data))
+      print(data)
+    end
+    endOfNameData = data:find(string.char(0), 13, true) -- true==plainTextSearchOnly/noPatternMatching
+    qName = getRdName(data:sub(13,endOfNameData))
+    print(clntMsgOrIp..": query ["..qName.."]")
 
     if sendLocalRsp then
+      if printRawMsg then
+        udpUpstrm:sendto(data, upstrmServer, upstrmPort)
+        upstrmRsp, upstrmMsgOrIp, upstrmPort1 = udpUpstrm:receivefrom()
+        print(str2Hex(upstrmRsp))
+      end
+
       localRsp = createLocalRsp(data, "localhost", "127.0.0.1", "::1")
       --print(str2Hex(localRsp))
       print(localRsp)
@@ -255,8 +291,10 @@ do
         print(("udpUpstrm:receivefrom %s:%s (%d bytes)"):format(
           upstrmMsgOrIp, upstrmPort1, string.len(upstrmRsp)
         ))
-        print(str2Hex(upstrmRsp))
-        --print(upstrmRsp)
+        if printRawMsg then
+          print(str2Hex(upstrmRsp))
+          print(upstrmRsp)
+        end
         printDnsMsg(upstrmRsp)
 
         msgHdrHex = str2Hex(upstrmRsp:sub(1,12))
