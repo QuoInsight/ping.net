@@ -101,23 +101,22 @@ local function ipAddrBytes2Str(s)
   return aAddr
 end
 
-local function getRdName(nameData)
-  local idx = 1
+local function getRdName(rawData, startIdx)
+  local idx = startIdx
   local rName = ""
   while true do
-    local sz1 = string.sub(nameData,idx,idx):byte()
+    local sz1 = string.sub(rawData,idx,idx):byte()
     idx = idx+1; if sz1==0 then break end
     if sz1<192 then
-      rName = rName..nameData:sub(idx,idx+sz1-1).."."
+      rName = rName..rawData:sub(idx,idx+sz1-1).."."
       idx = idx+sz1
     else
-     --[[
-      refNameOffset = byte2BitsBE(sz1):reverse()
-      refNameOffset = aNameOffset:sub(3,#refNameOffset) .. charAt2Bits(nameData,idx)
+      local refNameOffset = byte2BitsBE(sz1):reverse()
+      refNameOffset = refNameOffset:sub(3,#refNameOffset) .. charAt2Bits(rawData,idx)
       refNameOffset = tonumber(refNameOffset, 2)
       --print("refNameOffset: "..refNameOffset)
       -- 4.1.4. Message compression https://datatracker.ietf.org/doc/html/rfc1035
-     --]]
+      print(" >> "..rName..getRdName(rawData, refNameOffset+1))
       rName = rName.."*" -- we will not follow the reference/pointer and expand the name here,
       -- this allows us to keep the same length in the string output as the raw data !!
       idx = idx+1
@@ -132,8 +131,11 @@ end
 
 local function getRdType(qnAnsData)
   local endOfNameData = string.find(qnAnsData, string.char(0), 1, true) -- true==plainTextSearchOnly/noPatternMatching
+  -- above will assume the name ends with a null character / zero octet,
+  -- however this will not work correctly in the answer section when the
+  -- name ends with a reference/pointer instead
   local rspData = string.sub(qnAnsData,1,endOfNameData+4) -- remove all trailing data
-  return tonumber(str2Hex(string.sub(qnAnsData,endOfNameData+1,endOfNameData+2)),16) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
+  return bytes2Num(string.sub(qnAnsData,endOfNameData+1,endOfNameData+2)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
 end
 
 local function printDnsMsg(strMsg)
@@ -145,51 +147,61 @@ local function printDnsMsg(strMsg)
 
   byte4 = charAt2Bits(strMsg,4)
   rspCode = tonumber(byte4:sub(5,8), 2)
-  qCount = bytes2Num(string.sub(strMsg,5,6))
-  aCount = bytes2Num(string.sub(strMsg,7,8))
+  qCount = bytes2Num(strMsg:sub(5,6))
+  aCount = bytes2Num(strMsg:sub(7,8))
 
   print(string.format("[Header] qryRspFlg:%d opCode:%d rspCode:%d qCount:%d aCount:%d",
     qryRspFlg, opCode, rspCode, qCount, aCount
   ))
 
-  qName1 = getRdName(strMsg:sub(13, #strMsg));
-  byteIdx = 13 + #qName1+1 -- this is assuming the name is not expanded
-  qType = tonumber(str2Hex(string.sub(strMsg,byteIdx,byteIdx+1)),16) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
-  qClass = tonumber(str2Hex(string.sub(strMsg,byteIdx+2,byteIdx+3)),16) -- normally the value 1 for Internet ('IN')
-  byteIdx = byteIdx+4 -- end of q1
+  local byteIdx = 13
+  for count = 1,qCount,1 do
+    qName1 = getRdName(strMsg, byteIdx);
+    byteIdx = byteIdx + #qName1+1 -- this is assuming the name is not expanded
+    qType = bytes2Num(strMsg:sub(byteIdx,byteIdx+1)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
+    qClass = bytes2Num(strMsg:sub(byteIdx+2,byteIdx+3)) -- normally the value 1 for Internet ('IN')
+    byteIdx = byteIdx+4 -- end of q1
 
-  print("qName1: ["..qName1.."] qType:"..qType.." qClass:"..qClass)
+    print("qName"..count..": ["..qName1.."] qType:"..qType.." qClass:"..qClass)
+  end
 
-  if (qryRspFlg==1 and qCount==1 and aCount > 0) then
-    aName1 = getRdName(strMsg:sub(byteIdx, #strMsg));
-    --print("byteIdx:"..byteIdx.." #aName1:"..#aName1)
-    byteIdx = byteIdx + #aName1+1 -- this is assuming the name is not expanded
+  if (qryRspFlg==1 and qCount>=1 and aCount > 0) then
+    for count = 1,aCount,1 do
+      aName1 = getRdName(strMsg, byteIdx);
+      --print("byteIdx:"..byteIdx.." #aName1:"..#aName1)
+      byteIdx = byteIdx + #aName1+1 -- this is assuming the name is not expanded
 
-    aType = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+1)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
-    aClass = bytes2Num(string.sub(strMsg,byteIdx+2,byteIdx+3)) -- normally the value 1 for Internet ('IN')
-    byteIdx = byteIdx+4 --
-    print("aType:"..aType.." aClass:"..aClass.." aName1: ["..aName1.."]")
+      aType = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+1)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
+      aClass = bytes2Num(string.sub(strMsg,byteIdx+2,byteIdx+3)) -- normally the value 1 for Internet ('IN')
+      byteIdx = byteIdx+4 --
+      print("aType:"..aType.." aClass:"..aClass.." aName"..count..": ["..aName1.."]")
 
-    aTtl = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+3))
-    byteIdx = byteIdx+4 --
-    aSize = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+1))
-    byteIdx = byteIdx+2 --
-    print("aTtl:"..aTtl.." aSize:"..aSize)
+      aTtl = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+3))
+      byteIdx = byteIdx+4 --
+      aSize = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+1))
+      byteIdx = byteIdx+2 --
+      print("aTtl:"..aTtl.." aSize:"..aSize)
 
-    aData = strMsg:sub(byteIdx,byteIdx+aSize-1)
-    if (aType==5) then
-      print("cname: "..getRdName(aData..string.char(0)));
-    elseif (aType==1 or aType==28) then
-      print("ip: "..ipAddrBytes2Str(aData))
-    else
-      print("data: "..str2Hex(aData))
+      aData = strMsg:sub(byteIdx,byteIdx+aSize-1)
+      if (aType==5) then
+        print("cname: ["..getRdName(strMsg,byteIdx).."]");
+      elseif (aType==1 or aType==28) then
+        print("ip: ["..ipAddrBytes2Str(aData).."]")
+      else
+        print("data: ["..str2Hex(aData).."]")
+      end
+      byteIdx = byteIdx+aSize
     end
   end
 end
 
 local function createLocalRsp(qryData, hostName, ipAddrV4, ipAddrV6)
   local endOfNameData = string.find(qryData, string.char(0), 13, true) -- true==plainTextSearchOnly/noPatternMatching
-  local rspData = string.sub(qryData,1,endOfNameData+4) -- remove all trailing data
+  -- above will assume the name ends with a null character / zero octet,
+  -- this is OK here for the data in the question section, however it
+  -- will not work correctly if we are processing the answer data when
+  -- name ends with a reference/pointer instead
+  local rspData = qryData:sub(1,endOfNameData+4) -- remove all trailing data
 
   local byte3 = string.char( tonumber("1"..(charAt2Bits(rspData,3):sub(2,8)),2) ) -- set qryRspFlg=1
   local byte4 = string.char( tonumber("1"..(charAt2Bits(rspData,4):sub(2,4)).."0000",2) ) -- set recursionAvl=1, rspCode=0
@@ -197,7 +209,7 @@ local function createLocalRsp(qryData, hostName, ipAddrV4, ipAddrV6)
   rspData = replaceCharAt(rspData, 3, byte3)
   rspData = replaceCharAt(rspData, 4, byte4)
 
-  local qType = tonumber(str2Hex(string.sub(rspData,endOfNameData+1,endOfNameData+2)),16) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
+  local qType = bytes2Num(rspData:sub(endOfNameData+1,endOfNameData+2)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
   print("qType: "..qType)
 
   local aType = qType
@@ -218,13 +230,13 @@ local function createLocalRsp(qryData, hostName, ipAddrV4, ipAddrV6)
   elseif (aType==1) then
     if (ipAddrV4=="" or ipAddrV4=="0.0.0.0") then
       aCount = 0 -- this simply means we do not have any ipAddrV4 record
-  else
+    else
 
-    -- !! add CNAME !!
-    aCount = aCount + 1
-    aType5 = 5
-    rData = hostName ; rData = string.char(#rData)..rData..string.char(0)
-    answerData0 = (
+      -- !! add CNAME !!
+      aCount = aCount + 1
+      aType5 = 5
+      rData = hostName ; rData = string.char(#rData)..rData..string.char(0)
+      answerData0 = (
         hex2Str("c00c") .. string.char(0)
          .. string.char(aType5) .. hex2Str("00010000003c00")
           .. string.char(#rData) .. rData
@@ -274,7 +286,7 @@ do
       print(data)
     end
     endOfNameData = data:find(string.char(0), 13, true) -- true==plainTextSearchOnly/noPatternMatching
-    qName = getRdName(data:sub(13,endOfNameData))
+    qName = getRdName(data, 13)
     print(clntMsgOrIp..": query ["..qName.."]")
 
     if sendLocalRsp then
