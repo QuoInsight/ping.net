@@ -58,10 +58,6 @@ local function charAt2Bits(s, idx)
   return string.reverse(charAt2BitsBE(s, idx))
 end
 
-local function replaceCharAt(s, p, c)
-  return s:sub(1, p-1)..c.. s:sub(p+1)
-end
-
 ------------------------------------------------------------------------
 
 local function ipAddrBytes2Str(s)
@@ -108,19 +104,6 @@ local function getEndOfNameData(rawData, startIdx)
     end
   end
   return nil
-end
-
-------------------------------------------------------------------------
-
-local function getCustomNameResolution(hostName, clientIpAddr)
-  --local macAddr = string.gsub(ipAddr2MAC(clientIpAddr),"[:-]","")
-  --local customNameServiceFile = "hosts."..macAddr:lower()
-  local ipAddrV4 = nil
-  local ipAddrV6 = nil
-
-  --ipAddrV4 = ""
-  
-  return ipAddrV4, ipAddrV6
 end
 
 ------------------------------------------------------------------------
