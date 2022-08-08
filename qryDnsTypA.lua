@@ -2,17 +2,23 @@
 
 local dnsServer = "8.8.8.8"
 local dnsPort = 53
+local qType = 1
 local hostName = ""
 
 if #arg < 1 then
-  print("\nUsage: "..arg[0].." <HOST> [DNS_SERVER [DNS_PORT]]\n")
+  print("\nUsage: "..arg[0].." <HOST> [QRY_TYPE [DNS_SERVER [DNS_PORT]]]\n")
   os.exit()
 end
-if #arg>2 then dnsPort=arg[3] end
-if #arg>1 then dnsServer=arg[2] end
+if #arg>3 then dnsPort=arg[4] end
+if #arg>2 then dnsServer=arg[3] end
+if #arg>1 then qType=arg[2] end
 hostName = arg[1]
 
-print(hostName.."@"..dnsServer..":"..dnsPort)
+if qType=="A" then qType=1 end
+if qType=="AAAA" then qType=28 end
+qType = tonumber(qType)
+
+--print(hostName.."["..qType.."]".."@"..dnsServer..":"..dnsPort)
 
 ------------------------------------------------------------------------
 
@@ -110,7 +116,7 @@ end
 
 local socket = require("socket")
 
-local function qryDnsTypA(qName, srv, prt, sck)
+local function qryDns(qName, qType, srv, prt, sck)
   local function getRnd2Bytes()
     -- max value of 2 bytes == 65535 --
     math.randomseed(os.time())
@@ -126,8 +132,7 @@ local function qryDnsTypA(qName, srv, prt, sck)
     --print(str2Hex(qData))
     return qData
   end
-  local function getIpAddrV4(msgData)
-    local ipAddr = "0.0.0.0"
+  local function getAnswer(msgData, qType)
     --msgHdrHex = str2Hex(msgData:sub(1,12)) ; print(msgHdrHex)
     -- ID:2bytes; Flags+OpCode+RespCode:2bytes; RecordsCount:4*2bytes
     local byte4 = charAt2Bits(msgData,4)
@@ -146,30 +151,42 @@ local function qryDnsTypA(qName, srv, prt, sck)
         byteIdx = endOfNameData+1 -- end of a1
         local aType = bytes2Num(string.sub(msgData,byteIdx,byteIdx+1)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
         local aClass = bytes2Num(string.sub(msgData,byteIdx+2,byteIdx+3)) -- normally the value 1 for Internet ('IN')
-        --print("aType: "..aType)
+        --print("aType:"..aType.." qType:"..qType)
         byteIdx = byteIdx+8 --
         local aSize = bytes2Num(string.sub(msgData,byteIdx,byteIdx+1))
         byteIdx = byteIdx+2 --
-        if (aType==1) then
-          return ipAddrBytes2Str(msgData:sub(byteIdx,byteIdx+aSize-1))
+        if (aType==qType) then
+          local aData = msgData:sub(byteIdx,byteIdx+aSize-1)
+          if (aType==1 or aType==28) then
+            return ipAddrBytes2Str(aData)
+          else
+            return str2Hex(aData)
+          end
         end
         byteIdx = byteIdx+aSize
       end
     end
-    return ipAddr
+    if (qType==1) then
+      return "0.0.0.0"
+    elseif (qType==28) then
+      return "::"
+    else
+      return "#"
+    end
   end
   sck:settimeout(5);  sck:sendto(
     getRnd2Bytes() .. hex2Str("01000001000000000000")
-      .. formatNameData(qName) .. hex2Str("0000010001"),
-        srv, prt
+      .. formatNameData(qName) .. hex2Str("0000")
+        .. string.char(qType) .. hex2Str("0001"),
+          srv, prt
   )
   local rspData,srcAddrOrErrMsg,srcPort = sck:receivefrom()
   if rspData then
-    --print(str2Hex(rspData));  print(rspData)
-    return getIpAddrV4(rspData)
+    --print(str2Hex(rspData));  --print(rspData)
+    return getAnswer(rspData, qType)
   else
     error("Error: "..tostring(srcAddrOrErrMsg))
   end
 end
 
-print( qryDnsTypA(hostName, dnsServer, dnsPort, socket.udp()) )
+print( qryDns(hostName, qType, dnsServer, dnsPort, socket.udp()) )
