@@ -90,7 +90,7 @@ end
 
 ------------------------------------------------------------------------
 
-local function getEndOfNameData(rawData, startIdx)
+local function findEndOfNameData(rawData, startIdx)
   local idx = startIdx
   while true do
     local sz1 = string.sub(rawData,idx,idx):byte()
@@ -124,7 +124,7 @@ local function qryDns(qName, qType, srv, prt, sck)
     return string.char(math.floor(0.5+((t%10)/10*255)))
       .. string.char(math.random(0, 255))
   end
-  local function formatNameData(qName)
+  local function encodeNameData(qName)
     local qData = ""
     for n1,_ in string.gmatch(qName..'.', "([^%.]+)%.") do
       qData = qData .. string.char(#n1) .. n1
@@ -132,7 +132,7 @@ local function qryDns(qName, qType, srv, prt, sck)
     --print(str2Hex(qData))
     return qData
   end
-  local function getAnswer(msgData, qType)
+  local function parseAnswer(msgData, qType)
     --msgHdrHex = str2Hex(msgData:sub(1,12)) ; print(msgHdrHex)
     -- ID:2bytes; Flags+OpCode+RespCode:2bytes; RecordsCount:4*2bytes
     local byte4 = charAt2Bits(msgData,4)
@@ -142,12 +142,12 @@ local function qryDns(qName, qType, srv, prt, sck)
     --print("aCount: "..aCount)
     local byteIdx = 13
     for count = 1,qCount,1 do
-      local endOfNameData = getEndOfNameData(msgData, byteIdx)
+      local endOfNameData = findEndOfNameData(msgData, byteIdx)
       byteIdx = endOfNameData+1+4 -- end of q1
     end
     if (qCount>=1 and aCount > 0) then
       for count = 1,aCount,1 do
-        local endOfNameData = getEndOfNameData(msgData, byteIdx)
+        local endOfNameData = findEndOfNameData(msgData, byteIdx)
         byteIdx = endOfNameData+1 -- end of a1
         local aType = bytes2Num(string.sub(msgData,byteIdx,byteIdx+1)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
         local aClass = bytes2Num(string.sub(msgData,byteIdx+2,byteIdx+3)) -- normally the value 1 for Internet ('IN')
@@ -176,14 +176,14 @@ local function qryDns(qName, qType, srv, prt, sck)
   end
   sck:settimeout(5);  sck:sendto(
     getRnd2Bytes() .. hex2Str("01000001000000000000")
-      .. formatNameData(qName) .. hex2Str("0000")
+      .. encodeNameData(qName) .. hex2Str("0000")
         .. string.char(qType) .. hex2Str("0001"),
           srv, prt
   )
   local rspData,srcAddrOrErrMsg,srcPort = sck:receivefrom()
   if rspData then
     --print(str2Hex(rspData));  --print(rspData)
-    return getAnswer(rspData, qType)
+    return parseAnswer(rspData, qType)
   else
     error("Error: "..tostring(srcAddrOrErrMsg))
   end
