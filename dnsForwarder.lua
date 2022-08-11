@@ -1,14 +1,15 @@
 #!/usr/bin/env lua
 
 local localhost = '*' -- '127.0.0.1'
-local localport = 6760
+local localport = 50053
 local upstrmServer = "8.8.8.8" -- "192.168.43.1" -- "8.8.8.8" -- !! 192.168.192.1 ==> tcpNotSupported ## 
 local upstrmPort = 53
-local sendLocalRsp = true
+local sendLocalRsp = false
 local printRawMsg = false
 
 --[[
-  dig -p 6760 @192.168.43.1 google.com
+  inspired by https://github.com/tigerlyb/DNS-Proxy-Server-in-Python
+  dig -p 50053 @192.168.43.1 google.com
 --]]
 
 local function hex2Str(s)
@@ -57,6 +58,8 @@ local function replaceCharAt(s, p, c)
   return s:sub(1, p-1)..c.. s:sub(p+1)
 end
 
+------------------------------------------------------------------------
+
 local function ipAddrString2Bytes(s)
   local bAddr = ""
   --a1, a2, a3, a4 = string.match(s, '(%d+)%.(%d+)%.(%d+)%.(%d+)')
@@ -101,6 +104,8 @@ local function ipAddrBytes2Str(s)
   return aAddr
 end
 
+------------------------------------------------------------------------
+
 local function getRdName(rawData, startIdx)
   local idx = startIdx
   local rName = ""
@@ -127,6 +132,28 @@ local function getRdName(rawData, startIdx)
     end
   end
   return rName
+end
+
+local function findEndOfNameData(rawData, startIdx)
+  local idx = startIdx
+  while true do
+    local sz1 = string.sub(rawData,idx,idx):byte()
+    if sz1==0 then
+      return idx
+    elseif sz1<64 then
+      idx = idx+sz1+1
+      if idx>#rawData then
+        return nil -- data error
+      end
+    else -- elseif sz1>=192 then
+      return idx+1
+      -- 4.1.4. Message compression https://datatracker.ietf.org/doc/html/rfc1035
+      -- if a reference/pointer is found/used, it must either be the only element
+      -- or the last element !! no additional null character after this !!
+      -- hence, we should return immediately and ends here
+    end
+  end
+  return nil
 end
 
 local function getRdType(qnAnsData)
@@ -165,7 +192,7 @@ local function printDnsMsg(strMsg)
     print("qName"..count..": ["..qName1.."] qType:"..qType.." qClass:"..qClass)
   end
 
-  if (qryRspFlg==1 and qCount>=1 and aCount > 0) then
+  if (qryRspFlg==1 and qCount>0 and aCount>0) then
     for count = 1,aCount,1 do
       aName1 = getRdName(strMsg, byteIdx);
       --print("byteIdx:"..byteIdx.." #aName1:"..#aName1)
@@ -195,78 +222,104 @@ local function printDnsMsg(strMsg)
   end
 end
 
-local function createLocalRsp(qryData, hostName, ipAddrV4, ipAddrV6)
-  local endOfNameData = string.find(qryData, string.char(0), 13, true) -- true==plainTextSearchOnly/noPatternMatching
-  -- above will assume the name ends with a null character / zero octet,
-  -- this is OK here for the data in the question section, however it
-  -- will not work correctly if we are processing the answer data when
-  -- name ends with a reference/pointer instead
-  local rspData = qryData:sub(1,endOfNameData+4) -- remove all trailing data
+------------------------------------------------------------------------
 
-  local byte3 = string.char( tonumber("1"..(charAt2Bits(rspData,3):sub(2,8)),2) ) -- set qryRspFlg=1
-  local byte4 = string.char( tonumber("1"..(charAt2Bits(rspData,4):sub(2,4)).."0000",2) ) -- set recursionAvl=1, rspCode=0
-  --byte3=string.char(tonumber("10000001",2)) ; byte4=string.char(tonumber("10000000",2))
-  rspData = replaceCharAt(rspData, 3, byte3)
-  rspData = replaceCharAt(rspData, 4, byte4)
-
-  local qType = bytes2Num(rspData:sub(endOfNameData+1,endOfNameData+2)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
-  print("qType: "..qType)
-
-  local aType = qType
-  local aCount = 1
-  local rData = ""
-
-  local aNameData = hex2Str("c00c") -- this is default !!
-  --aNameData = hex2Str("06676f6f676c65c013") -- this is accepted !!
-  --aNameData = hex2Str("06676f6f676c6503636f6d") -- but this is not !!??
-  --aNameData = "-" ; aNameData = string.char(#aNameData)..aNameData..hex2Str("c00c") -- this is OK
-
-  if (aType==28) then
-    if (ipAddrV6=="" or ipAddrV6=="::") then
-      aCount = 0 -- this simply means we do not have any ipAddrV6 record
-    else
-      rData = ipAddrString2Bytes(ipAddrV6)
-    end
-  elseif (aType==1) then
-    if (ipAddrV4=="" or ipAddrV4=="0.0.0.0") then
-      aCount = 0 -- this simply means we do not have any ipAddrV4 record
-    else
-
-      -- !! add CNAME !!
-      aCount = aCount + 1
-      aType5 = 5
-      rData = hostName ; rData = string.char(#rData)..rData..string.char(0)
-      answerData0 = (
-        hex2Str("c00c") .. string.char(0)
-         .. string.char(aType5) .. hex2Str("00010000003c00")
-          .. string.char(#rData) .. rData
-      )
-      aNameData = answerData0..rData
-
-      rData = ipAddrString2Bytes(ipAddrV4)
-    end
-  else
-    aCount = 0
+local function overrideTTL(strMsg, ttl)
+  local rMsg = strMsg
+  --msgHdrHex = str2Hex(strMsg:sub(1,12)) ; print(msgHdrHex)
+  -- ID:2bytes; Flags+OpCode+RespCode:2bytes; RecordsCount:4*2bytes
+  local byte4 = charAt2Bits(strMsg,4)
+  local rspCode = tonumber(byte4:sub(5,8), 2)
+  local qCount = bytes2Num(strMsg:sub(5,6))
+  local aCount = bytes2Num(strMsg:sub(7,8))
+  local byteIdx = 13
+  for count = 1,qCount,1 do
+    endOfNameData = findEndOfNameData(strMsg, byteIdx)
+    byteIdx = endOfNameData+1+4 -- end of q1
   end
+  if (qCount>0 and aCount > 0) then
+    for count = 1,aCount,1 do
+      endOfNameData = findEndOfNameData(strMsg, byteIdx)
+      byteIdx = endOfNameData+1+4 -- end of a1
 
-  answerData = (
-    aNameData .. string.char(0)
-     .. string.char(aType) .. hex2Str("00010000003c00")
-       .. string.char(#rData) .. rData
-  )
+      aTtl = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+3))
+      rMsg = rMsg:sub(1, byteIdx-1)..hex2Str(string.format("%08x",ttl)).. rMsg:sub(byteIdx+4)
+      byteIdx = byteIdx+4 --
 
-  rspData = replaceCharAt(rspData, 8, string.char(aCount)) -- set aCount
-  rspData = replaceCharAt(rspData, 10, string.char(0)) -- set authCount
-  rspData = replaceCharAt(rspData, 12, string.char(0)) -- set addlCount
-  rspData = rspData .. answerData
+      aSize = bytes2Num(string.sub(strMsg,byteIdx,byteIdx+1))
+      byteIdx = byteIdx+2 --
+      print("updated aTtl:"..aTtl.."-->"..ttl.." aSize:"..aSize)
 
-  return rspData 
+      byteIdx = byteIdx+aSize
+    end
+  end
+  return rMsg
 end
 
-local socket = require("socket")
+------------------------------------------------------------------------
 
-local udpUpstrm = socket.udp()
-udpUpstrm:settimeout(5)
+local function getCustomNameResolution(hostName, clientIpAddr)
+  --local macAddr = string.gsub(ipAddr2MAC(clientIpAddr),"[:-]","")
+  --local customNameServiceFile = "hosts."..macAddr:lower()
+  local ipAddrV4 = nil
+
+  ipAddrV4 = "127.0.0.1"
+  return ipAddrV4
+end
+
+------------------------------------------------------------------------
+
+local function encodeNameData(qName)
+  local qData = ""
+  for n1,_ in string.gmatch(qName..'.', "([^%.]+)%.") do
+    qData = qData .. string.char(#n1) .. n1
+  end
+  --print(str2Hex(qData))
+  return qData
+end
+
+local function createDnsAnswer0(qryId, qName, qType)
+  return qryId .. hex2Str("81800001000000000000")
+    .. encodeNameData(qName) .. hex2Str("00")
+      .. hex2Str(string.format("%04x",qType))
+        ..  hex2Str("0001")
+end
+
+local function createDnsAnswerTypeA(qryId, hostName, ipAddrV4, ttl)
+ --[[
+  dig -p 50053 @127.0.0.1 google.com
+  data = "8180000100010000000006676f6f676c6503636f6d0000010001c00c00010001000000eb0004acd91a4e"
+ --]]
+  return qryId .. hex2Str("81800001000100000000")
+    .. encodeNameData(hostName)
+      .. hex2Str("0000010001c00c00010001")
+        .. hex2Str(string.format("%08x",ttl))
+          .. hex2Str("0004") .. ipAddrString2Bytes(ipAddrV4)
+end
+
+------------------------------------------------------------------------
+
+local function forwardDnsQuery(qryData, udpUpstrm, upstrmServer, upstrmPort)
+  udpUpstrm:settimeout(5)
+
+  udpUpstrm:sendto(qryData, upstrmServer, upstrmPort)
+  local upstrmRsp, upstrmSrcAddrOrErrMsg, upstrmSrcPort = udpUpstrm:receivefrom()
+
+  if upstrmRsp then
+    print(("udpUpstrm:receivefrom %s:%s (%d bytes)"):format(
+      upstrmSrcAddrOrErrMsg, upstrmSrcPort, string.len(upstrmRsp)
+    ))
+  else
+    print("udpUpstrm:error %s", upstrmSrcAddrOrErrMsg) 
+  end
+
+  udpUpstrm:close()
+  return upstrmRsp
+end
+
+------------------------------------------------------------------------
+
+local socket = require("socket")
 
 local udp = socket.udp()
 udp:settimeout(0)
@@ -275,63 +328,49 @@ udp:setsockname(localhost, localport)
 print "Beginning server loop."
 while true
 do
-  data, clntMsgOrIp, clntPort = udp:receivefrom()
+  data, srcAddrOrErrMsg, srcPort = udp:receivefrom()
   if data then
     time = os.date("*t")
     print(("\n%02d:%02d:%02d udp:receivefrom %s:%s (%d bytes)"):format(
-      time.hour, time.min, time.sec, clntMsgOrIp, clntPort, string.len(data)
+      time.hour, time.min, time.sec, srcAddrOrErrMsg, srcPort, string.len(data)
     ))
     if printRawMsg then
       print(str2Hex(data))
       print(data)
     end
+
     endOfNameData = data:find(string.char(0), 13, true) -- true==plainTextSearchOnly/noPatternMatching
     qName = getRdName(data, 13)
-    print(clntMsgOrIp..": query ["..qName.."]")
+    byteIdx = 13 + #qName+1 -- this is assuming the name is not expanded
+    qType = bytes2Num(data:sub(byteIdx,byteIdx+1)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
+    qClass = bytes2Num(data:sub(byteIdx+2,byteIdx+3)) -- normally the value 1 for Internet ('IN')
 
-    if sendLocalRsp then
-      if printRawMsg then
-        udpUpstrm:sendto(data, upstrmServer, upstrmPort)
-        upstrmRsp, upstrmMsgOrIp, upstrmPort1 = udpUpstrm:receivefrom()
-        print(str2Hex(upstrmRsp))
-      end
+    print(srcAddrOrErrMsg..": query ["..qName.."]")
 
-      localRsp = createLocalRsp(data, "localhost", "127.0.0.1", "::1")
-      --print(str2Hex(localRsp))
-      print(localRsp)
-      udp:sendto(localRsp, clntMsgOrIp, clntPort)
-      --goto continue
-    else
-      udpUpstrm:sendto(data, upstrmServer, upstrmPort)
-      upstrmRsp, upstrmMsgOrIp, upstrmPort1 = udpUpstrm:receivefrom()
-      if upstrmRsp then
-        print(("udpUpstrm:receivefrom %s:%s (%d bytes)"):format(
-          upstrmMsgOrIp, upstrmPort1, string.len(upstrmRsp)
-        ))
-        if printRawMsg then
-          print(str2Hex(upstrmRsp))
-          print(upstrmRsp)
-        end
-        printDnsMsg(upstrmRsp)
-
-        msgHdrHex = str2Hex(upstrmRsp:sub(1,12))
-        rcode = tonumber(msgHdrHex:sub(8,8), 16)
-        if (rcode == 1) then
-          print("Request is not a DNS query. Format Error!")
-        elseif (rcode ~= 0) then
-          print(string.format("Error Response [%d]!", rcode))
-        else
-          print("Success!")
-          --print(str2Hex(upstrmRsp))
-        end
-
-        udp:sendto(upstrmRsp, clntMsgOrIp, clntPort)
+    if (sendLocalRsp) then
+      if (qType==1) then
+        cnrIpAddrV4 = getCustomNameResolution(qName, clientIpAddr)
+        rspData = createDnsAnswerTypeA(data:sub(1,2), qName, cnrIpAddrV4, 60)
       else
-        print("udpUpstrm:error %s", upstrmMsgOrIp) 
+        rspData = createDnsAnswer0(data:sub(1,2), qName, qType)
       end
     end
-  elseif clntMsgOrIp ~= 'timeout' then
-     error("Unknown network error: "..tostring(msg))
+
+    if (not sendLocalRsp) then
+      rspData = forwardDnsQuery(data, socket.udp(), upstrmServer, upstrmPort)
+      rspData = overrideTTL(rspData, 60) --
+    end
+
+    if printRawMsg then
+      print(str2Hex(rspData))
+      print(rspData)
+    end
+    printDnsMsg(rspData)
+
+    udp:sendto(rspData, srcAddrOrErrMsg, srcPort)
+
+  elseif srcAddrOrErrMsg ~= 'timeout' then
+    error("Unknown network error: "..tostring(srcAddrOrErrMsg))
   end
   ::continue::
 end
