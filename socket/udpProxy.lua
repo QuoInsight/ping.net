@@ -25,7 +25,7 @@ local function getDeviceLanIpAddr()
     output = string.gsub(output, "^%s*(.-)%s*$", "%1") --trim
     return output
   end
-  local cmdln = "ifconfig br-lan | grep -F 'inet addr:' | sed -r 's/^\s*inet addr:([^ ]+).*/\1/'"
+  local cmdln = "ifconfig br-lan | grep -F 'inet addr:' | sed -r 's/^\\s*inet addr:([^ ]+).*/\\1/'"
   return _exeCmd(cmdln)
 end
 
