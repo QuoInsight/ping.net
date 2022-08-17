@@ -179,10 +179,10 @@ local function qryDns(qName, qType, srv, prt, sck)
     .. encodeNameData(qName) .. hex2Str("0000")
       .. string.char(qType) .. hex2Str("0001")
   sck:settimeout(5);  -- sck:sendto(qryData, srv, prt) -- this will be more compatible/flexible
-  sck:setpeername(srv, prt); sck:send(qryData) -- this is more standard/proper, not work well with svcAddr=INADDR_ANY
+  sck:setpeername(srv, prt); sck:send(qryData) -- this is more standard/proper
 
-  --local rspData,srcAddrOrErrMsg,srcPort = sck:receivefrom()
-  local rspData,errMsg = sck:receive()
+  --local rspData,srcAddrOrErrMsg,srcPort = sck:receivefrom() -- this has no issue with svcAddr=INADDR_ANY
+  local rspData,errMsg = sck:receive() -- not work well with svcAddr=INADDR_ANY except for local loopback connections
   if rspData then
     --print(str2Hex(rspData));  --print(rspData)
     return parseAnswer(rspData, qType)
