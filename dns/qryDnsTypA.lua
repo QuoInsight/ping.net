@@ -3,7 +3,7 @@
 local dnsServer = "8.8.8.8"
 local dnsPort = 53
 local qType = 1
-local hostName = ""
+local hostName = "google.com"
 
 if #arg < 1 then
   print("\nUsage: "..arg[0].." <HOST> [QRY_TYPE [DNS_SERVER [DNS_PORT]]]\n")
@@ -174,18 +174,21 @@ local function qryDns(qName, qType, srv, prt, sck)
       return "#"
     end
   end
-  sck:settimeout(5);  sck:sendto(
-    getRnd2Bytes() .. hex2Str("01000001000000000000")
-      .. encodeNameData(qName) .. hex2Str("0000")
-        .. string.char(qType) .. hex2Str("0001"),
-          srv, prt
-  )
-  local rspData,srcAddrOrErrMsg,srcPort = sck:receivefrom()
+
+  local qryData = getRnd2Bytes() .. hex2Str("01000001000000000000")
+    .. encodeNameData(qName) .. hex2Str("0000")
+      .. string.char(qType) .. hex2Str("0001")
+  sck:settimeout(5);  -- sck:sendto(qryData, srv, prt) -- this will be more compatible/flexible
+  sck:setpeername(srv, prt); sck:send(qryData) -- this is more standard/proper, not working with svcAddr=INADDR_ANY
+
+  --local rspData,srcAddrOrErrMsg,srcPort = sck:receivefrom()
+  local rspData,errMsg = sck:receive()
   if rspData then
     --print(str2Hex(rspData));  --print(rspData)
     return parseAnswer(rspData, qType)
   else
-    error("Error: "..tostring(srcAddrOrErrMsg))
+    --if errMsg==nil then errMsg=srcAddrOrErrMsg end
+    error("Error: "..tostring(srcAddrOrErrMsg or errMsg))
   end
 end
 
