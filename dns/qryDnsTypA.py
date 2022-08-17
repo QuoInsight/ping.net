@@ -156,13 +156,19 @@ def qryDns(qName, qType, srv, prt, sck) :
   #print(bytes2Hex(qryData)); print(qryData);
 
   ##sck.bind(('', 40053)) ## use specific source port !!
-  ##sck.connect((srv, prt)); sck.send(qryData) ## this is more standard/proper ?? not work well with svcAddr=INADDR_ANY
-  sck.sendto(qryData, (srv, prt)) ## this will be more compatible/flexible !!
+  srvAddrPort = (srv, prt); ## sck.sendto(qryData, srvAddrPort) ## this will be more compatible/flexible !! no issue with svcAddr=INADDR_ANY
+  sck.connect(srvAddrPort); sck.send(qryData) ## this is more standard/proper ?? not work well with svcAddr=INADDR_ANY except for local loopback connections
   #print("sent")
 
-  rspData = sck.recv(1024)
+  ##both recvfrom() and recv() in python seems to work with either sendto() or connect()/send()
+  rspData,srcAddrPort = sck.recvfrom(1024) ## by right, should be used with sendto()
+  #rspData = sck.recv(1024);  srcAddrPort = srvAddrPort ## by right, should be used with connect()/send()
+  try: srcAddrPort = sck.getpeername()
+  except: pass
   #print("received")
+
   if rspData :
+    #print(srcAddrPort)
     #print(bytes2Hex(rspData)); ##print(rspData)
     return parseAnswer(rspData, qType)
   else :
