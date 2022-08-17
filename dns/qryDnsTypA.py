@@ -156,7 +156,7 @@ def qryDns(qName, qType, srv, prt, sck) :
   #print(bytes2Hex(qryData)); print(qryData);
 
   ##sck.bind(('', 40053)) ## use specific source port !!
-  ##sck.connect((srv, prt)); sck.send(qryData) ## this is more standard/proper ??
+  ##sck.connect((srv, prt)); sck.send(qryData) ## this is more standard/proper ?? not work well with svcAddr=INADDR_ANY
   sck.sendto(qryData, (srv, prt)) ## this will be more compatible/flexible !!
   #print("sent")
 
