@@ -26,6 +26,15 @@ local function qryDNSTypA(name, srv, prt)
   return _exeCmd(cmdln)
 end
 
+local function getLuaSocketDnsIpAddr(name)
+  local socket = require("socket")
+  local addr,details = socket.dns.toip(name)
+  #print(dumptable(details))
+  #local addrDetails = socket.dns.getaddrinfo(name)
+  #print(dumptable(addrDetails))
+  return addr
+end
+
 local function ipAddr2MAC(ipAddr)
   --[[
     arp | grep -Fi 'A4:12:32:B8:26:B5' | sed 's/\([^ ]\+\).\+/\1/'
