@@ -29,9 +29,9 @@ end
 local function getLuaSocketDnsIpAddr(name)
   local socket = require("socket")
   local addr,details = socket.dns.toip(name)
-  #print(dumptable(details))
-  #local addrDetails = socket.dns.getaddrinfo(name)
-  #print(dumptable(addrDetails))
+  --printD(dumptable(details))
+  --local addrDetails = socket.dns.getaddrinfo(name)
+  --printD(dumptable(addrDetails))
   return addr
 end
 
