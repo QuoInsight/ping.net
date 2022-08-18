@@ -1,8 +1,11 @@
 #!/usr/bin/env lua
 
 local svcAddr = '*' -- '127.0.0.1'
-local svcPort = 53
+local svcPort = 50053
 local printRawMsg = false
+
+if #arg>=2 then svcAddr=arg[2] end
+if #arg>=1 then svcPort=arg[1] end
 
 ------------------------------------------------------------------------
 
@@ -183,7 +186,7 @@ if svcAddr=='*' then svcAddr=getLanIpAddr() end
 udp:settimeout(0)
 udp:setsockname(svcAddr, svcPort)
 
-print "Beginning server loop."
+print("Beginning server loop ["..svcAddr..":"..svcPort.."] ...")
 while true do
   data, srcAddrOrErrMsg, srcPort = udp:receivefrom()
   if data then
@@ -199,7 +202,7 @@ while true do
     endOfNameData = data:find(string.char(0), 13, true) -- true==plainTextSearchOnly/noPatternMatching
     qName = getRdName(data, 13)
     byteIdx = 13 + #qName+1 -- this is assuming the name is not expanded
-    qType = bytes2Num(data:sub(byteIdx,byteIdx+1)) -- 1:A(ipv4)|28:AAAA(ipv6)| https://en.wikipedia.org/wiki/List_of_DNS_record_types#Resource_records
+    qType = bytes2Num(data:sub(byteIdx,byteIdx+1)) -- 1:A(ipv4)|28:AAAA(ipv6)|
     qClass = bytes2Num(data:sub(byteIdx+2,byteIdx+3)) -- normally the value 1 for Internet ('IN')
 
     print(srcAddrOrErrMsg..": query ["..qName.."]")
