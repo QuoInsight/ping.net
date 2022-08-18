@@ -29,10 +29,15 @@ end
 local function getLuaSocketDnsIpAddr(name)
   local socket = require("socket")
   local addr,details = socket.dns.toip(name)
-  --printD(dumptable(details))
-  --local addrDetails = socket.dns.getaddrinfo(name)
-  --printD(dumptable(addrDetails))
-  return addr
+  if addr==nil then
+    printD("Error: "..details)
+    return "0.0.0.0"
+  else
+    printD(details) -- printD(dumptable(addrDetails))
+    --local addrDetails = socket.dns.getaddrinfo(name)
+    --printD(addrDetails)
+    return addr
+  end
 end
 
 local function ipAddr2MAC(ipAddr)
