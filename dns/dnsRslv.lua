@@ -89,11 +89,11 @@ local function ipAddrString2Bytes(s)
   end
   bAddr = s:gsub(":","")
   if (bAddr=="") then
-    bAddr = "00000000000000000000000000000000"
+    bAddr = string.rep("0",32)
   elseif (#bAddr==1) then
-    bAddr = "0000000000000000000000000000000" .. bAddr
+    bAddr = string.rep("0",32) .. bAddr
   elseif ( not( #bAddr==32 and string.match(string.rep("%x",32)) ) ) then
-    bAddr = "00000000000000000000000000000000"
+    bAddr = string.rep("0",32)
   end
   return hex2Str(bAddr)
 end
