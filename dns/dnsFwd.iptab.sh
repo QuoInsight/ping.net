@@ -11,9 +11,14 @@ action="$2"
 custDns="$3"
 
 fwdDns() {
+  local lanAddr=`ifconfig br-lan | grep -F 'inet addr:' | sed -r 's/^\s*inet addr:([^ ]+).*/\1/'`
   local macAddr="$1";(echo "$macAddr"|grep -q ':')||macAddr=`echo "$1"|sed 's/\(..\)/\1:/g'|sed s'/:$/\1/'`
-  local action=${2:-enable}; local custDns=${3-127.0.0.1:50053}; macAddr=`echo "$macAddr"|awk '{print tolower($0)}'`
+  local action=${2:-enable}; local custDns=${3-$lanAddr:50053}; macAddr=`echo "$macAddr"|awk '{print tolower($0)}'`
   local iptab="PREROUTING -p udp -m mac --mac-source $macAddr -m udp --dport 53 -j DNAT --to-destination $custDns"
+
+  # for some reason, it is not working correctly with '-j REDIRECT --to-port 50053' or '-j DNAT --to-destination 127.0.0.1:50053'
+  # somehow the DNS traffic is not routed/redirected to [./dnsRslv.lua 50053 127.0.0.1], but works OK with lanAddr:50053
+
   if [ "$action" == "disable" ] || [ "$action" == "delete" ] || [ "$action" == "off" ]; then
     cmdln="iptables -t nat -D $iptab"
     echo "$cmdln";eval "$cmdln"
