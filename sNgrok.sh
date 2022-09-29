@@ -13,9 +13,9 @@ nohup=-f
 [ -z "$5" ] || l_key="$5"
 
 if [ "$n_prt" == "http" ]; then
-  n_prt="http -bind-tls=false"
+  n_prt="http --scheme http" ## "http -bind-tls=false"
 elif [ "$n_prt" == "https" ]; then
-  n_prt="http -bind-tls=true"
+  n_prt="http --scheme https" ## "http -bind-tls=true"
 fi
 
 log="/tmp/sNgrok.${l_hst}.${l_prt}.log"
