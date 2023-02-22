@@ -2,7 +2,7 @@
 
 local function writelog(filepath, s)
   local f = io.open(filepath, "a")
-  f:write(s);  f:close()
+  f:write(s.."\n");  f:close()
   return
 end
 
@@ -39,7 +39,7 @@ while true do
   --  print(line)
   --end
   --f:close()
-  line = output:match("[^\r\n]+\n*$"):gsub('[\r\n]+','')
+  if output==nil or output=="" then line="" else line=output:match("[^\r\n]*\n*$"):gsub('[\r\n]+','') end
   avg = line:match("/[%d%.]+/")
   if avg==nil then avg=99999 else avg=tonumber(tostring(avg:gsub('/',''))) end
   output = datetimestr .. " [" .. target .. "] " .. avg .. " ms"
