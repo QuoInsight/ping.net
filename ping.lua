@@ -41,13 +41,14 @@ while true do
   --f:close()
   if output==nil or output=="" then line="" else line=output:match("[^\r\n]*\n*$"):gsub('[\r\n]+','') end
   avg = line:match("/[%d%.]+/");  if avg==nil then avg=99999 else avg=tonumber(tostring(avg:gsub('/',''))) end
-  output = datetimestr .. " [" .. target .. "] " .. avg .. " ms"
-  print(output)
+  output1 = datetimestr .. " [" .. target .. "] " .. avg .. " ms"
+  print(output1)
   if avg < threshold then
-    if not ok then writelog(log,output) end
+    if not ok then writelog(log,output1) end
     ok = true
   else
-    if ok then writelog(log,output) end
+    print(output)
+    if ok then writelog(log,output1) end
     ok = false
   end
 end
