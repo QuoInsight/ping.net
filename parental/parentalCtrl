@@ -1,0 +1,53 @@
+#!/bin/sh
+ipAddrs="192.168.175.188/32 192.168.175.192/32"
+# TIZEN [192.168.75.171]
+# HUAWEI_MatePad [192.168.75.188]
+# vostro3590 [192.168.75.192]
+
+action="$1"
+option="${2:-all}"
+
+if [ "$action" == "on" ]; then
+  rm /tmp/prctl.off;touch /tmp/prctl.on
+elif [ "$action" == "off" ]; then
+  rm /tmp/prctl.on;touch /tmp/prctl.off
+elif [ "$action" == "cronchk" ]; then
+  rm /tmp/prctl.on;rm /tmp/prctl.off
+elif [ -f "/tmp/prctl.on" ]; then
+  action="on"
+elif [ -f "/tmp/prctl.off" ]; then
+  action="off"
+else
+  action="cronchk"
+fi
+echo "$action"
+
+prctl_iptab() {
+  local ipAddrs="$1"
+  local action="$2"
+  if [ "$action" == "cronchk" ]; then
+    if (/root/bzbx.lua cronchk '*' '7-21' '*' '*' '*'); then
+      action="off"
+    else
+      action="on"
+    fi
+  fi
+  /root/prctl.iptab "$ipAddrs" $action && return 0
+  return 1
+}
+
+prctl_dns() {
+  local action="$1"
+  if [ "$action" == "cronchk" ]; then
+    if (/root/bzbx.lua cronchk /root/prctl.cronchk); then
+      action="off"
+    else
+      action="on"
+    fi
+  fi
+  echo "$action"
+    /root/prctl.dns $action
+}
+
+[ "$option" != "dns" ] && prctl_iptab "$ipAddrs" $action || exit
+[ "$option" != "iptab" ] && prctl_dns $action
