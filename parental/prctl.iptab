@@ -1,0 +1,43 @@
+#!/bin/sh
+[ -z "$1" ] && {
+  iptables -S | grep "FORWARD.*-j reject"
+  echo ""
+  echo "usage: $0 '<ipaddrs>' [block|unblock] [-s|-d]"
+  echo ""
+  exit
+}
+ipAddrs="$1"
+action="$2"
+srcDst="$3"
+[ -z "$srcDst" ] && srcDst='-s' # reject outbound from sourceIP
+
+rjctIpTrfx() {
+  local ipAddr=$1;(echo "$ipAddr"|grep -q '/')||ipAddr="${ipAddr}/32"
+  local action=${2:-block};local iptab="FORWARD $3 $ipAddr -j reject"
+  if [ "$action" == "unblock" ] || [ "$action" == "delete" ] || [ "$action" == "open" ] || [ "$action" == "off" ]; then
+    cmdln="iptables -D $iptab"
+    echo "$cmdln";eval "$cmdln"
+  elif ( iptables -S | grep -F "$iptab" ) ; then
+    echo "skipped. rule exists"
+  else
+    cmdln="iptables -I $iptab"
+    echo "$cmdln";eval "$cmdln"
+    return 1
+  fi
+  return 0
+}
+
+rjctIpTrfx2() {
+  local ipAddrs="$1"
+  local action="$2"
+  local srcDst="$3"
+  local returnCode=0
+  for ipAddr in $ipAddrs; do
+    rjctIpTrfx $ipAddr $action $srcDst || returnCode=1
+  done
+  return $returnCode
+}
+
+returnCode=0; rjctIpTrfx2 "$ipAddrs" $action $srcDst || returnCode=1
+
+exit $returnCode
