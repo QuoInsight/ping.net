@@ -1,0 +1,54 @@
+#!/bin/sh
+[ -z "$1" ] && {
+  ls -l /var/etc/dnsmasq.conf.*
+  echo ""
+  echo "usage: $0 <alw|blc>"
+  echo ""
+  exit
+}
+ctl="$1"
+( [ "$ctl" == "on" ] || [ "$ctl" == "lock" ] || [ "$ctl" == "block" ] )  && ctl="blc"
+( [ "$ctl" == "off" ] || [ "$ctl" == "open" ] || [ "$ctl" == "unblock" ] )  && ctl="alw"
+
+ctlUpdate=0
+for f in `ls /var/etc/dnsmasq.conf.* | grep -v '\.[ab]..$'`
+do
+  echo "$f"
+  if [ ! -f "$f.blc" ]; then
+    echo "create $f[.blc]|[.alw]"
+    # assume default config is always enabling the parental control
+    if [ -f "$f.bak" ]; then
+      cp "$f.bak" "$f.blc"
+      cp "$f" "$f.alw"
+    else
+      cp "$f" "$f.blc"
+      sed 's/^address=.\+\/$/#&/' "$f" > "$f.alw"
+      sed 's/^address=.\+\/0\.0\.0\.0$/#&/' "$f" > "$f.alw"
+    fi
+  fi
+  ctlFile="$f.$ctl"
+  echo "apply $ctlFile"
+  if (cmp -s "$f" "$ctlFile"); then
+    echo "no change"
+  else
+    if [ -f "$f.bak" ]; then
+      rm "$f.bak"
+    else
+      mv "$f" "$f.bak"
+    fi
+    cp "$ctlFile" "$f"
+    echo "updated"
+    ctlUpdate=1
+  fi
+done
+[ $ctlUpdate -gt 0 ] && {
+  kill `cat /var/run/dnsmasq/dnsmasq.*` ## should auto-restart
+  sleep 3
+  (ps | grep dnsmasq | grep -v grep) || {
+    # fail to auto-restart
+    #/etc/init.d/dnsmasq reload ## will reload the default config !!
+    f0=`basename "$f"`; echo "start $f0  manually"
+    /usr/sbin/dnsmasq -C "$f" -k -x "/var/run/dnsmasq/${f0}.pid" &
+  }
+}
+ls -l /var/etc/dnsmasq.conf.*
