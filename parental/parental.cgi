@@ -1,6 +1,6 @@
 #!/bin/sh
 echoCgiPrmVal() {
-  echo "$1" | grep "$2=" | sed -E "s/.*&?$2=([^&]*).*/\1/"
+  echo "&$1" | grep "&$2=" | sed -E "s/.*&$2=([^&]*).*/\1/"
 }
 
 POST_STRING=$(cat) # opt=`echo "$POST_STRING" | sed 's/opt=//'`
