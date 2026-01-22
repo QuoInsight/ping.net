@@ -32,4 +32,5 @@ case "$url" in
 esac
 cmdln="curl -m $maxTime -N -w '%{speed_download}' --limit-rate 1g -o /dev/null '$url'"
 echo $cmdln
-echo "$(eval $cmdln | sed 's/$/*8\/1048576\n/' | bc) Mbps"
+#echo "$(eval $cmdln | sed 's/$/*8\/1048576\n/' | bc) Mbps"
+eval $cmdln | awk '{print int($1*8/1048576) " Mbps"}'
