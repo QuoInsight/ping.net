@@ -10,24 +10,19 @@
 
 #if [[ "$1" =~ '^[0-9]+$' ]]; then  ## this works for bash/ash only, [[]] not supported by sh/bourne shell
 if (echo "$1" | grep -q -E '^[0-9]+$'); then  ## this works for all bash/ash/sh
-  maxTime=$1
-  if [ "$2" != "" ]; then
-    url=$2
-  fi  
+  maxTime=$1 ; [ -z "$2" ] || url=$2
 else
-  maxTime=5
-  if [ "$1" != "" ]; then 
-    url=$1
-  fi
+  maxTime=5 ; [ -z "$1" ] || url=$1
 fi
+sz=104857600 # 209715200 | 524288000 | 1073741824
 case "$url" in
-  "tm") url='https://speedtest-northern.tm.com.my:8080/download?size=104857600' ;;
-  "th") url='https://speedtest-hyi1.3bb.co.th.prod.hosts.ooklaserver.net:8080/download?size=104857600' ;;
-  "kris") url='http://speedtest2.mykris.net:8080/download?size=104857600' ;;
-  "u"|"") url='https://speedtest2.u.com.my:8080/download?size=104857600' ;;
+  "tm") url='https://speedtest-northern.tm.com.my:8080/download?size=$sz' ;;
+  "th") url='https://speedtest-hyi1.3bb.co.th.prod.hosts.ooklaserver.net:8080/download?size=$sz' ;;
+  "kris") url='http://speedtest2.mykris.net:8080/download?size=$sz' ;;
+  "u"|"") url='https://speedtest2.u.com.my:8080/download?size=$sz' ;;
   "-")  ## more URL at http://c.speedtest.net/speedtest-servers-static.php
     url=`curl -s http://c.speedtest.net/speedtest-servers-static.php | grep -E -m 1 'host="(\S+)"' | sed -n -r 's/^.+host="(\S+)".*/\1/p'`
-    url="http://$url/download?size=104857600"
+    url="http://$url/download?size=$sz"
   ;;
 esac
 cmdln="curl -m $maxTime -N -w '%{speed_download}' --limit-rate 1g -o /dev/null '$url'"
