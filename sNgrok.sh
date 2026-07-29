@@ -12,6 +12,8 @@ nohup=-f
 [ -z "$4" ] || n_reg="$4"
 [ -z "$5" ] || l_key="$5"
 
+[ -z "$USER" ] && USER=`whoami`
+
 if [ "$n_prt" == "http" ]; then
   n_prt="http --scheme http" ## "http -bind-tls=false"
 elif [ "$n_prt" == "https" ]; then
@@ -37,11 +39,13 @@ eval "$cmdln" | while IFS= read -r line; do
   echo ">> $line"
   n_endp=$(echo "$line" | grep '^Forwarding' | sed 's/^[^ ]\+ \+//')
   if [ ! -z "$n_endp" ]; then
-    if [ "$l_prt" == "22" ] && [ "$n_prt" == "tcp" ]; then
-      n_endp=$(echo "$n_endp" | sed 's/^tcp:\/\///')
-      r_hst=$(echo ${n_endp%:*})
-      r_prt=$(echo ${n_endp#*:})
-      n_endp="ssh root@${r_hst} -p ${r_prt}"
+    if [ "$n_prt" = "tcp" ] && {
+      [ "$l_prt" = "22" ] || [ "$l_prt" = "2222" ]
+    }; then
+      n_endp=${n_endp#tcp://}
+      r_hst=${n_endp%:*}
+      r_prt=${n_endp#*:}
+      n_endp="ssh ${USER}@${r_hst} -p ${r_prt}"
     fi
     date | tee -a "$log"
     echo "$cmdln" >> "$log"
