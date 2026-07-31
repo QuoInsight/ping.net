@@ -2,8 +2,11 @@
 l_hst=localhost
 l_prt=22
 n_prt=tcp
-n_reg=ap
+n_reg=ap ## |ap|jp|au|in|sa|eu|us|us-cal-1|
+## [ https://ngrok.com/docs/gateway/points-of-presence ]
+
 l_key=/etc/dropbear/dropbear_rsa_host_key
+l_ssh=ssh ## |ssh|dbclient|
 nohup=-f
 
 [ -z "$1" ] || l_hst="$1"
@@ -14,22 +17,23 @@ nohup=-f
 
 [ -z "$USER" ] && USER=`whoami`
 
-if [ "$n_prt" == "http" ]; then
+if [ "$n_prt" = "http" ]; then
   n_prt="http --scheme http" ## "http -bind-tls=false"
-elif [ "$n_prt" == "https" ]; then
+elif [ "$n_prt" = "https" ]; then
   n_prt="http --scheme https" ## "http -bind-tls=true"
 fi
 
 log="/tmp/sNgrok.${l_hst}.${l_prt}.log"
-cmdln="ssh -i ${l_key} ${nohup} -y -K 30 -R 0:${l_hst}:${l_prt} tunnel.${n_reg}.ngrok.com ${n_prt}"
+cmdln="${l_ssh} -i ${l_key} ${nohup} -y -K 30 -R 0:${l_hst}:${l_prt} tunnel.${n_reg}.ngrok.com ${n_prt}"
 echo "$cmdln"
 
-psOutput=$(ps -w | grep 'ssh ' | grep -v 'grep')
-IFS=$'\n'
+psOutput=$(ps -w -ef | grep '${l_ssh} ' | grep -v 'grep')  ## remove -ef for os with busybox which does not support this
+IFS='
+'
 for line in $psOutput ; do
-  PID=`echo "$line" | sed -e 's/^ *\([0-9]\+\).*/\1/'` # sed -r 's/^\s*([0-9]+).*/\1/'
+  PID=`echo "$line" | sed -e 's/^\([^0-9]* \)*\([0-9][0-9]*\).*/\2/'`
   cmdln1=`cat /proc/$PID/cmdline | xargs -0 echo`
-  if [ "$cmdln1" == "$cmdln" ]; then
+  if [ "$cmdln1" = "$cmdln" ]; then
     echo "**found** PID: $PID"
     exit
   fi
