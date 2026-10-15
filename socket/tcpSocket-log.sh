@@ -2,7 +2,7 @@
 
 hst="info.cern.ch"
 prt=80
-cmd=$'GET / HTTP/1.0\r\nHost: info.cern.ch\r\n\r\n'
+cmd=$'GET\x20/ HTTP/1.0\r\nHost: info.cern.ch\r\n\r\n'
 
 timeout_ms=1000
 sleep_sec=3
