@@ -1,6 +1,6 @@
 $hst = "info.cern.ch"
 $prt = 80
-$cmd= "GET" + [char]0x20 + "/ HTTP/1.0`r`nHost: info.cern.ch`r`n`r`n"
+$cmd = "GET" + [char]0x20 + "/ HTTP/1.0`r`nHost: info.cern.ch`r`n`r`n"
 $timeoutMs = 5000
 [int]$sleep = 3
 [int]$summary = 10
