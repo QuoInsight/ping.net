@@ -20,7 +20,7 @@ $i=0; $fails=0; $totalTime=0; $min=-1; $max=0; $since=Get-Date -Format "yyyy-MM-
 $ping = New-Object System.Net.NetworkInformation.Ping
 while ($true) {
   if ($i % $summary -eq 0) {
-    Write-Host "Monitoring pings to $target [$summaryMsg]. Press Ctrl+C to stop." -ForegroundColor Cyan
+    Write-Host "Monitoring pings to $target [$summaryMsg] Press Ctrl+C to stop." -ForegroundColor Cyan
   }
   if (++$i -gt 1) { Start-Sleep -Seconds 1 }
 
@@ -34,14 +34,13 @@ while ($true) {
     Write-Host "[$timeStamp] Reply from ${targetAddr}: bytes=$($reply.Buffer.Length) time=$($reply.RoundtripTime)ms TTL=$($reply.Options.Ttl)" -ForegroundColor Green
   } else {
     $fails++
-    $logMessage = "[$timeStamp] i=$i Ping to $targetAddr failed: " + $reply.Status
-    Write-Host $logMessage -ForegroundColor Red
-    Add-Content -Path $logFile -Value $logMessage
+    $logMsg = "[$timeStamp] i=$i Ping to $targetAddr failed: " + $reply.Status
+    Write-Host $logMsg -ForegroundColor Red
+    Add-Content -Path $logFile -Value $logMsg
   }
   $avg = if ($i -eq 0) { 0 } else { [Math]::Round($totalTime/$i) }
   $summaryMsg = "failures=$fails/$i avg=$avg max=$max min=$min since=$since"
   if ($i % $summaryLog -eq 0) {
-    $logMessage = "[$timeStamp] $summaryMsg"
-    Add-Content -Path $logFile -Value $logMessage
+    Add-Content -Path $logFile -Value "[$timeStamp] $summaryMsg"
   }
 }
