@@ -54,7 +54,7 @@ def main():
 
   # Buffer to store incoming stream data
   readbuffer = ""
-  joined = False
+  READY = False
 
   # Main loop to listen for data
   while True:
@@ -83,7 +83,7 @@ def main():
         m = re.search(r"^:\S+ (\d+)", line)
         nRpl = m.group(1) if m else None
 
-        if not joined :
+        if not READY :
 
           if nRpl in ('001','002','003','004') :
             # skip 001 RPL_WELCOME 002 RPL_YOURHOST 003 RPL_CREATED 004 RPL_MYINFO
@@ -131,22 +131,24 @@ def main():
               time.sleep(2)
             #
 
-            print(f"\n>> Joining channel {CHANNEL}... ", end="")
-            send(sck, f"JOIN {CHANNEL}")
-            print(">> sent. [" + getCurrTime() + "]")
-            joined = True
+            if CHANNEL :
+              print(f"\n>> Joining channel {CHANNEL}... ", end="")
+              send(sck, f"JOIN {CHANNEL}")
+              print(">> sent. [" + getCurrTime() + "]")
 
-            time.sleep(1)
-            send(sck, f"CHATHISTORY LATEST {CHANNEL} timestamp 10")
-            print(f">> sent: CHATHISTORY LATEST {CHANNEL}")
+              time.sleep(1)
+              send(sck, f"CHATHISTORY LATEST {CHANNEL} timestamp 10")
+              print(f">> sent: CHATHISTORY LATEST {CHANNEL}")
 
-            #MSG = "Hi, everyone!"
-            #send(sck, f"PRIVMSG {CHANNEL} :{MSG}")
-            #print(f">> sent: {$MSG}")
-            continue
+              #MSG = "Hi, everyone!"
+              #send(sck, f"PRIVMSG {CHANNEL} :{MSG}")
+              #print(f">> sent: {$MSG}")
+              continue
+            #
+            READY = True
           #
 
-        # not joined
+        # not READY
 
         # Filter and print channel messages (PRIVMSG)
         if "PRIVMSG" in line :
@@ -170,7 +172,7 @@ def main():
               print(">> replied.")
             #
           #
-        elif joined :
+        elif READY :
           if nRpl == "353" :
             # skip RPL_NAMREPLY default /NAMES list of connected users
             continue
