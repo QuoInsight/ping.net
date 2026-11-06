@@ -156,10 +156,11 @@ def main():
           parts = line.split(":", 2)
           if CHANNEL in line:
             if len(parts) >= 3:
-              user = parts[1].split("!")[0]
-              message = parts[2]
+              usr = parts[1].split("!")[0]
+              target = parts[1].rstrip().split()[-1]
+              msg = parts[2]
               print(getCurrTime())
-              print(f"[{CHANNEL}] <{user}> {message}")
+              print(f"[{usr}>>{target}] {msg}")
               continue
             #
           #
